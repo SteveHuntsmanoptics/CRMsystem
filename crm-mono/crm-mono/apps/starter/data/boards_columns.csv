@@ -1,0 +1,4 @@
+board_name,scope_(global|team|account),related_org_name_optional,column_name,order_index,wip_limit_optional
+FJ Lawn Mowers,Steve & Kam,Mitre10,,in progress,
+Magne-tech International,Steve & Kam & Trav,Germany & Uk,,In progress,
+Hikmicro fish finder ,Steve,Au & NZ,new product,received,

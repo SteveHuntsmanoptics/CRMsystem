@@ -1,0 +1,98 @@
+
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+model Organisation {
+  id            String  @id @default(cuid())
+  name          String
+  tradingName   String?
+  nzbn_abn      String?
+  territory     String?
+  priceTier     String?
+  ownerEmail    String?
+  customerCode  String?
+  people        Person[]
+  deals         Deal[]
+  boards        Board[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Person {
+  id         String  @id @default(cuid())
+  org        Organisation? @relation(fields: [orgId], references: [id])
+  orgId      String?
+  firstName  String
+  lastName   String
+  email      String?
+  phone      String?
+  role       String?
+  territory  String?
+  ownerEmail String?
+  tags       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([orgId])
+}
+
+model Pipeline {
+  id        String  @id @default(cuid())
+  name      String
+  stages    PipelineStage[]
+  deals     Deal[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PipelineStage {
+  id           String  @id @default(cuid())
+  pipeline     Pipeline @relation(fields: [pipelineId], references: [id])
+  pipelineId   String
+  name         String
+  probability  Float
+  orderIndex   Int
+  deals        Deal[]
+  @@index([pipelineId, orderIndex])
+}
+
+model Deal {
+  id           String  @id @default(cuid())
+  org          Organisation? @relation(fields: [orgId], references: [id])
+  orgId        String?
+  person       Person? @relation(fields: [personId], references: [id])
+  personId     String?
+  pipeline     Pipeline? @relation(fields: [pipelineId], references: [id])
+  pipelineId   String?
+  stage        PipelineStage? @relation(fields: [stageId], references: [id])
+  stageId      String?
+  valueCents   Int?
+  currency     String? @default("NZD")
+  expectedClose DateTime?
+  discountPct  Float?
+  ownerEmail   String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([orgId])
+  @@index([pipelineId, stageId])
+}
+
+model Board {
+  id           String  @id @default(cuid())
+  name         String
+  scope        String
+  relatedOrg   Organisation? @relation(fields: [relatedOrgId], references: [id])
+  relatedOrgId String?
+  columns      BoardColumn[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model BoardColumn {
+  id         String @id @default(cuid())
+  board      Board  @relation(fields: [boardId], references: [id])
+  boardId    String
+  name       String
+  orderIndex Int
+  wipLimit   Int?
+}

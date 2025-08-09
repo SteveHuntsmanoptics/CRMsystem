@@ -1,0 +1,12 @@
+{
+  "name": "crm-mono",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "pnpm --filter ./apps/web dev",
+    "seed": "pnpm --filter ./apps/starter ts-node prisma/seed.ts"
+  }
+}
