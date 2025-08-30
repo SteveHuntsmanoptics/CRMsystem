@@ -1,9 +1,4 @@
 import { NextResponse } from 'next/server';
-
 export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    service: 'crm-system',
-    time: new Date().toISOString(),
-  });
+  return NextResponse.json({ ok: true, service: 'crm', time: new Date().toISOString() });
 }
