@@ -72,4 +72,4 @@ export default function Home() {{
 - This pack won’t change your database or auth. It only makes the app more robust to deploy and debug.
 - After this, feel free to ask for **Fix Pack 1** (auth/DB, roles, forms, CRUD, etc.).
 
-_Last updated: 2025-08-10_
+_Last updated: 2025-08-10_- test PR plumbing
