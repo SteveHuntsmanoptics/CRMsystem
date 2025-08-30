@@ -1,0 +1,50 @@
+name: Codex Apply → Auto PR
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  apply:
+    if: github.event.label.name == 'codex-apply'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Apply files from issue body
+        run: node scripts/codex_apply/apply_from_issue.js "$GITHUB_EVENT_PATH"
+      - name: Create branch and push
+        run: |
+          BRANCH="codex/apply-${{ github.event.issue.number }}-$(date +%Y%m%d%H%M%S)"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Codex apply from issue #${{ github.event.issue.number }}"
+          git push -u origin "$BRANCH"
+      - name: Open Pull Request
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = process.env.BRANCH;
+            if (!branch) { core.info('No branch created.'); return; }
+            const pr = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: branch,
+              base: 'main',
+              title: `Codex apply: #${context.issue.number}`,
+              body: `Automated PR created from issue #${context.issue.number}.`
+            });
+            core.info(`PR #${pr.data.number} created`);
