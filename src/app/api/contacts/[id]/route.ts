@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import prisma from "@/lib/prisma";
 import { handleApiError, NotFoundError } from "@/lib/api/errors";
-import { requireApiKey } from "@/lib/api/guard";
+import { getSessionUser, requireRole } from "@/lib/auth";
 import { contactIdSchema, contactResponseSchema, contactUpdateSchema } from "@/schemas/contact";
+import { writeAuditLog } from "@/server/audit";
 
 function serializeContact(contact: any) {
   return contactResponseSchema.parse({
@@ -41,7 +42,8 @@ async function ensureCompanyExists(companyId: string) {
 
 export async function GET(request: NextRequest, context: { params: { id: string } }) {
   try {
-    requireApiKey(request);
+    const user = await getSessionUser(request);
+    requireRole(user, "VIEWER");
 
     const params = contactIdSchema.parse(context.params);
     const contact = await getContactOrThrow(params.id);
@@ -54,10 +56,11 @@ export async function GET(request: NextRequest, context: { params: { id: string 
 
 export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
   try {
-    requireApiKey(request);
+    const user = await getSessionUser(request);
+    requireRole(user, ["SALES", "MANAGER", "ADMIN"]);
 
     const params = contactIdSchema.parse(context.params);
-    await getContactOrThrow(params.id);
+    const before = await getContactOrThrow(params.id);
 
     const payload = await request.json();
     const result = contactUpdateSchema.safeParse(payload);
@@ -104,6 +107,15 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       data: updateData,
     });
 
+    await writeAuditLog({
+      user,
+      action: "UPDATE",
+      entity: "contact",
+      entityId: contact.id,
+      before,
+      after: contact,
+    });
+
     return NextResponse.json({ data: serializeContact(contact) });
   } catch (error) {
     return handleApiError(error);
@@ -112,14 +124,24 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
 
 export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
   try {
-    requireApiKey(request);
+    const user = await getSessionUser(request);
+    requireRole(user, ["MANAGER", "ADMIN"]);
 
     const params = contactIdSchema.parse(context.params);
-    await getContactOrThrow(params.id);
+    const before = await getContactOrThrow(params.id);
 
     const contact = await (prisma as any).contact.update({
       where: { id: params.id },
       data: { deletedAt: new Date() },
+    });
+
+    await writeAuditLog({
+      user,
+      action: "DELETE",
+      entity: "contact",
+      entityId: contact.id,
+      before,
+      after: contact,
     });
 
     return NextResponse.json({ data: serializeContact(contact) });
