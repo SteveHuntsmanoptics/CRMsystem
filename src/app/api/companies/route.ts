@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 import prisma from "@/lib/prisma";
 import { handleApiError } from "@/lib/api/errors";
-import { requireApiKey } from "@/lib/api/guard";
+import { getSessionUser, requireRole } from "@/lib/auth";
 import { buildPaginationMeta, parsePaginationParams } from "@/lib/api/pagination";
 import {
   companyCreateSchema,
   companyResponseSchema,
   companySearchSchema,
 } from "@/schemas/company";
+import { writeAuditLog } from "@/server/audit";
 
 function serializeCompany(company: any) {
   return companyResponseSchema.parse({
@@ -27,7 +28,8 @@ function serializeCompany(company: any) {
 
 export async function GET(request: NextRequest) {
   try {
-    requireApiKey(request);
+    const user = await getSessionUser(request);
+    requireRole(user, "VIEWER");
 
     const pagination = parsePaginationParams(request.nextUrl.searchParams);
     const query = companySearchSchema.parse({
@@ -68,7 +70,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    requireApiKey(request);
+    const user = await getSessionUser(request);
+    requireRole(user, ["SALES", "MANAGER", "ADMIN"]);
 
     const payload = await request.json();
     const result = companyCreateSchema.safeParse(payload);
@@ -85,6 +88,14 @@ export async function POST(request: NextRequest) {
         description: result.data.description ?? null,
         tags: result.data.tags ?? [],
       },
+    });
+
+    await writeAuditLog({
+      user,
+      action: "CREATE",
+      entity: "company",
+      entityId: company.id,
+      after: company,
     });
 
     return NextResponse.json({ data: serializeCompany(company) }, { status: 201 });

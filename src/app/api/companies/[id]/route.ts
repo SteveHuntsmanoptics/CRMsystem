@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import prisma from "@/lib/prisma";
 import { handleApiError, NotFoundError } from "@/lib/api/errors";
-import { requireApiKey } from "@/lib/api/guard";
+import { getSessionUser, requireRole } from "@/lib/auth";
 import { companyIdSchema, companyResponseSchema, companyUpdateSchema } from "@/schemas/company";
+import { writeAuditLog } from "@/server/audit";
 
 function serializeCompany(company: any) {
   return companyResponseSchema.parse({
@@ -30,7 +31,8 @@ async function getCompanyOrThrow(id: string) {
 
 export async function GET(request: NextRequest, context: { params: { id: string } }) {
   try {
-    requireApiKey(request);
+    const user = await getSessionUser(request);
+    requireRole(user, "VIEWER");
 
     const params = companyIdSchema.parse(context.params);
     const company = await getCompanyOrThrow(params.id);
@@ -42,10 +44,11 @@ export async function GET(request: NextRequest, context: { params: { id: string 
 
 export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
   try {
-    requireApiKey(request);
+    const user = await getSessionUser(request);
+    requireRole(user, ["SALES", "MANAGER", "ADMIN"]);
 
     const params = companyIdSchema.parse(context.params);
-    await getCompanyOrThrow(params.id);
+    const before = await getCompanyOrThrow(params.id);
 
     const payload = await request.json();
     const result = companyUpdateSchema.safeParse(payload);
@@ -79,6 +82,15 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       data: updateData,
     });
 
+    await writeAuditLog({
+      user,
+      action: "UPDATE",
+      entity: "company",
+      entityId: company.id,
+      before,
+      after: company,
+    });
+
     return NextResponse.json({ data: serializeCompany(company) });
   } catch (error) {
     return handleApiError(error);
@@ -87,14 +99,24 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
 
 export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
   try {
-    requireApiKey(request);
+    const user = await getSessionUser(request);
+    requireRole(user, ["MANAGER", "ADMIN"]);
 
     const params = companyIdSchema.parse(context.params);
-    await getCompanyOrThrow(params.id);
+    const before = await getCompanyOrThrow(params.id);
 
     const company = await (prisma as any).company.update({
       where: { id: params.id },
       data: { deletedAt: new Date() },
+    });
+
+    await writeAuditLog({
+      user,
+      action: "DELETE",
+      entity: "company",
+      entityId: company.id,
+      before,
+      after: company,
     });
 
     return NextResponse.json({ data: serializeCompany(company) });

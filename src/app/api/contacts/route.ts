@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import prisma from "@/lib/prisma";
 import { handleApiError, NotFoundError } from "@/lib/api/errors";
-import { requireApiKey } from "@/lib/api/guard";
+import { getSessionUser, requireRole } from "@/lib/auth";
 import { buildPaginationMeta, parsePaginationParams } from "@/lib/api/pagination";
 import { contactCreateSchema, contactFilterSchema, contactResponseSchema } from "@/schemas/contact";
+import { writeAuditLog } from "@/server/audit";
 
 function serializeContact(contact: any) {
   return contactResponseSchema.parse({
@@ -34,7 +35,8 @@ async function ensureCompanyExists(companyId: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    requireApiKey(request);
+    const user = await getSessionUser(request);
+    requireRole(user, "VIEWER");
 
     const pagination = parsePaginationParams(request.nextUrl.searchParams);
     const filters = contactFilterSchema.parse({
@@ -90,7 +92,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    requireApiKey(request);
+    const user = await getSessionUser(request);
+    requireRole(user, ["SALES", "MANAGER", "ADMIN"]);
 
     const payload = await request.json();
     const result = contactCreateSchema.safeParse(payload);
@@ -112,6 +115,14 @@ export async function POST(request: NextRequest) {
         tags: result.data.tags ?? [],
         notes: result.data.notes ?? null,
       },
+    });
+
+    await writeAuditLog({
+      user,
+      action: "CREATE",
+      entity: "contact",
+      entityId: contact.id,
+      after: contact,
     });
 
     return NextResponse.json({ data: serializeContact(contact) }, { status: 201 });
